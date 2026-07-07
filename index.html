@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My To Do List</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --blue-deep: #1b36d1;
+    --blue-bright: #1ba0d1;
+    --blue-pale: #e9f3f7;
+    --ink: #1a1f2e;
+    --ink-soft: #5a6478;
+    --line: #d7e3ea;
+    --white: #ffffff;
+    --high: #d1481b;
+    --medium: #d1a31b;
+    --low: #4a9b5e;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--blue-pale);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+
+  /* ---------- Password gate ---------- */
+  #gate {
+    position: fixed;
+    inset: 0;
+    background: var(--blue-deep);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  #gate-box {
+    background: var(--white);
+    padding: 36px 32px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 320px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  }
+
+  #gate-box h1 {
+    font-size: 18px;
+    margin: 0 0 18px;
+    color: var(--ink);
+  }
+
+  #gate-box input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  #gate-box button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: var(--blue-deep);
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  #gate-error {
+    color: var(--high);
+    font-size: 13px;
+    margin-top: 10px;
+    min-height: 16px;
+  }
+
+  /* ---------- App shell ---------- */
+  #app { display: none; }
+
+  header {
+    background: var(--blue-deep);
+    color: white;
+    padding: 22px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  header h1 {
+    margin: 0;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+  }
+
+  header .sub {
+    font-size: 13px;
+    opacity: 0.85;
+    margin-top: 4px;
+  }
+
+  #add-bar {
+    max-width: 1100px;
+    margin: 18px auto 0;
+    padding: 0 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  #add-bar input, #add-bar select {
+    padding: 10px 12px;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    font-size: 14px;
+    background: white;
+    color: var(--ink);
+  }
+
+  #add-bar input[type="text"] {
+    flex: 1 1 220px;
+    min-width: 160px;
+  }
+
+  #add-bar button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    background: var(--blue-bright);
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  #add-bar button:hover { background: var(--blue-deep); }
+
+  main {
+    max-width: 1100px;
+    margin: 24px auto 60px;
+    padding: 0 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .category {
+    background: var(--white);
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .category-head {
+    background: var(--blue-deep);
+    color: white;
+    padding: 12px 16px;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.01em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .category-head .count {
+    background: rgba(255,255,255,0.2);
+    border-radius: 20px;
+    padding: 2px 9px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .task-list {
+    flex: 1;
+    padding: 8px;
+    min-height: 40px;
+  }
+
+  .empty-cat {
+    color: var(--ink-soft);
+    font-size: 13px;
+    text-align: center;
+    padding: 18px 8px;
+  }
+
+  .task {
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--medium);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: white;
+    transition: opacity 0.15s;
+  }
+
+  .task.priority-High { border-left-color: var(--high); }
+  .task.priority-Medium { border-left-color: var(--medium); }
+  .task.priority-Low { border-left-color: var(--low); }
+
+  .task.done { opacity: 0.5; }
+
+  .task input[type="checkbox"] {
+    margin-top: 3px;
+    width: 17px;
+    height: 17px;
+    accent-color: var(--blue-bright);
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .task-body { flex: 1; min-width: 0; }
+
+  .task-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    word-break: break-word;
+  }
+
+  .task.done .task-name { text-decoration: line-through; }
+
+  .task-meta {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--ink-soft);
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 10.5px;
+  }
+
+  .badge.priority-High { background: #fbe5dc; color: var(--high); }
+  .badge.priority-Medium { background: #faf0d6; color: var(--medium); }
+  .badge.priority-Low { background: #e1f0e4; color: var(--low); }
+
+  .task-delete {
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 2px 4px;
+    flex-shrink: 0;
+  }
+
+  .task-delete:hover { color: var(--high); }
+
+  #status {
+    text-align: center;
+    font-size: 13px;
+    color: var(--ink-soft);
+    padding: 14px;
+  }
+
+  @media (max-width: 480px) {
+    #add-bar { flex-direction: column; }
+    #add-bar input, #add-bar select, #add-bar button { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div id="gate-box">
+    <h1>My To Do List</h1>
+    <input type="password" id="gate-input" placeholder="Password" autocomplete="off">
+    <button id="gate-submit">Unlock</button>
+    <div id="gate-error"></div>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <h1>My To Do List</h1>
+    <div class="sub">Organized by area</div>
+    <div id="add-bar">
+      <input type="text" id="new-name" placeholder="New task...">
+      <select id="new-category"></select>
+      <select id="new-priority">
+        <option value="High">High</option>
+        <option value="Medium" selected>Medium</option>
+        <option value="Low">Low</option>
+      </select>
+      <input type="date" id="new-due">
+      <button id="add-btn">Add Task</button>
+    </div>
+  </header>
+
+  <main id="board"></main>
+  <div id="status"></div>
+</div>
+
+<script>
+  // ====== CONFIGURE THESE TWO VALUES BEFORE DEPLOYING ======
+  const SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL"; // https://lrrrhqfkmvojseqhkvjr.supabase.co/rest/v1/
+  const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY"; // sb_publishable_aXG6oQDb_EymAAIknqtotg_nP0Fo7ow
+  const DASHBOARD_PASSWORD = "CHANGE_ME";
+  // ===========================================================
+
+  const CATEGORIES = [
+    "Investments",
+    "House/Garden",
+    "ISY Consulting",
+    "T+L",
+    "Cendyn",
+    "GHA",
+    "Personal/Miscellaneous"
+  ];
+
+  const PRIORITY_ORDER = { High: 0, Medium: 1, Low: 2 };
+
+  let supabase;
+  let tasks = [];
+
+  // ---------- Gate ----------
+  const gate = document.getElementById('gate');
+  const gateInput = document.getElementById('gate-input');
+  const gateError = document.getElementById('gate-error');
+
+  function tryUnlock() {
+    if (gateInput.value === DASHBOARD_PASSWORD) {
+      gate.style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      initApp();
+    } else {
+      gateError.textContent = "Incorrect password.";
+    }
+  }
+
+  document.getElementById('gate-submit').addEventListener('click', tryUnlock);
+  gateInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+
+  // ---------- App ----------
+  function initApp() {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const catSelect = document.getElementById('new-category');
+    CATEGORIES.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      catSelect.appendChild(opt);
+    });
+
+    document.getElementById('add-btn').addEventListener('click', addTask);
+    document.getElementById('new-name').addEventListener('keydown', e => {
+      if (e.key === 'Enter') addTask();
+    });
+
+    loadTasks();
+  }
+
+  async function loadTasks() {
+    setStatus("Loading tasks...");
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      setStatus("Error loading tasks: " + error.message);
+      return;
+    }
+    tasks = data || [];
+    render();
+    setStatus("");
+  }
+
+  async function addTask() {
+    const nameInput = document.getElementById('new-name');
+    const name = nameInput.value.trim();
+    if (!name) return;
+
+    const category = document.getElementById('new-category').value;
+    const priority = document.getElementById('new-priority').value;
+    const due = document.getElementById('new-due').value || null;
+
+    setStatus("Adding task...");
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert([{ name, category, priority, due_date: due, done: false }])
+      .select();
+
+    if (error) {
+      setStatus("Error adding task: " + error.message);
+      return;
+    }
+
+    tasks.push(data[0]);
+    nameInput.value = '';
+    document.getElementById('new-due').value = '';
+    render();
+    setStatus("");
+  }
+
+  async function toggleDone(id, current) {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ done: !current })
+      .eq('id', id);
+
+    if (error) {
+      setStatus("Error updating task: " + error.message);
+      return;
+    }
+    const t = tasks.find(t => t.id === id);
+    if (t) t.done = !current;
+    render();
+  }
+
+  async function deleteTask(id) {
+    if (!confirm("Delete this task?")) return;
+
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      setStatus("Error deleting task: " + error.message);
+      return;
+    }
+    tasks = tasks.filter(t => t.id !== id);
+    render();
+  }
+
+  function setStatus(msg) {
+    document.getElementById('status').textContent = msg;
+  }
+
+  function formatDate(d) {
+    if (!d) return null;
+    const date = new Date(d + 'T00:00:00');
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  function render() {
+    const board = document.getElementById('board');
+    board.innerHTML = '';
+
+    CATEGORIES.forEach(cat => {
+      const catTasks = tasks
+        .filter(t => t.category === cat)
+        .sort((a, b) => {
+          if (a.done !== b.done) return a.done ? 1 : -1;
+          return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+        });
+
+      const section = document.createElement('div');
+      section.className = 'category';
+
+      const head = document.createElement('div');
+      head.className = 'category-head';
+      head.innerHTML = `<span>${cat}</span><span class="count">${catTasks.filter(t => !t.done).length}</span>`;
+      section.appendChild(head);
+
+      const list = document.createElement('div');
+      list.className = 'task-list';
+
+      if (catTasks.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-cat';
+        empty.textContent = 'No tasks';
+        list.appendChild(empty);
+      } else {
+        catTasks.forEach(t => {
+          const row = document.createElement('div');
+          row.className = `task priority-${t.priority}${t.done ? ' done' : ''}`;
+
+          const due = formatDate(t.due_date);
+
+          row.innerHTML = `
+            <input type="checkbox" ${t.done ? 'checked' : ''}>
+            <div class="task-body">
+              <div class="task-name"></div>
+              <div class="task-meta">
+                <span class="badge priority-${t.priority}">${t.priority}</span>
+                ${due ? `<span>${due}</span>` : ''}
+              </div>
+            </div>
+            <button class="task-delete" title="Delete">&times;</button>
+          `;
+
+          row.querySelector('.task-name').textContent = t.name;
+          row.querySelector('input[type="checkbox"]').addEventListener('change', () => toggleDone(t.id, t.done));
+          row.querySelector('.task-delete').addEventListener('click', () => deleteTask(t.id));
+
+          list.appendChild(row);
+        });
+      }
+
+      section.appendChild(list);
+      board.appendChild(section);
+    });
+  }
+</script>
+
+</body>
+</html>
